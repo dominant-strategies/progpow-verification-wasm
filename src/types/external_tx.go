@@ -4,7 +4,6 @@ import (
 	"math/big"
 
 	"github.com/dominant-strategies/progpow-verification-wasm/common"
-	"github.com/dominant-strategies/progpow-verification-wasm/log"
 )
 
 type ExternalTx struct {
@@ -26,42 +25,6 @@ type ExternalTx struct {
 	// Before an ETX can be processed at the destination chain, the ETX must
 	// become referencable through block manifests, thereby guaranteeing that
 	// the origin chain indeed confirmed emission of that ETX.
-}
-
-// PendingEtxsRollup is Header and manifest Hash of that header that should
-// be forward propagated
-type PendingEtxsRollup struct {
-	Header   *Header       `json:"header" gencodec:"required"`
-	Manifest BlockManifest `json:"manifest" gencodec:"required"`
-}
-
-func (p *PendingEtxsRollup) IsValid(hasher TrieHasher) bool {
-	if p == nil || p.Header == nil || p.Manifest == nil {
-		log.Info("PendingEtxRollup: p/p.Header/p.Manifest is nil", "p", p)
-		return false
-	}
-	return DeriveSha(p.Manifest, hasher) == p.Header.ManifestHash(common.ZONE_CTX)
-}
-
-// PendingEtxs are ETXs which have been emitted from the zone which produced
-// the given block. Specifically, it contains the collection of ETXs emitted
-// since our prior coincident with our sub in that slice. In Prime context, our
-// subordinate will be a region node, so the Etxs list will contain the rollup
-// of ETXs emitted from each zone block since the zone's prior coincidence with
-// the region. In Region context, our subordinate chain will be the zone
-// itself, so the Etxs list will just contain the ETXs emitted directly in that
-// zone block (a.k.a. a singleton).
-type PendingEtxs struct {
-	Header *Header      `json:"header" gencodec:"required"`
-	Etxs   Transactions `json:"etxs"   gencodec:"required"`
-}
-
-func (p *PendingEtxs) IsValid(hasher TrieHasher) bool {
-	if p == nil || p.Header == nil || p.Etxs == nil {
-		log.Info("PendingEtx: p/p.Header/p.Etxs is nil", "p", p)
-		return false
-	}
-	return DeriveSha(p.Etxs, hasher) == p.Header.EtxHash()
 }
 
 // copy creates a deep copy of the transaction data and initializes all fields.

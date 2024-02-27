@@ -20,7 +20,6 @@ package types
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
 	"io"
 	"math/big"
 	"reflect"
@@ -29,17 +28,13 @@ import (
 	"time"
 
 	"github.com/dominant-strategies/progpow-verification-wasm/common"
-	"github.com/dominant-strategies/progpow-verification-wasm/common/hexutil"
-	"github.com/dominant-strategies/progpow-verification-wasm/log"
 	"github.com/dominant-strategies/progpow-verification-wasm/rlp"
 	"lukechampine.com/blake3"
 )
 
 var (
-	EmptyRootHash  = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
-	EmptyUncleHash = RlpHash([]*Header(nil))
-	hasher         = blake3.New(32, nil)
-	hasherMu       sync.RWMutex
+	hasher   = blake3.New(32, nil)
+	hasherMu sync.RWMutex
 )
 
 // A BlockNonce is a 64-bit hash which proves (combined with the
@@ -50,21 +45,6 @@ type BlockNonce [8]byte
 // Bytes() returns the raw bytes of the block nonce
 func (n BlockNonce) Bytes() []byte {
 	return n[:]
-}
-
-// Uint64 returns the integer value of a block nonce.
-func (n BlockNonce) Uint64() uint64 {
-	return binary.BigEndian.Uint64(n[:])
-}
-
-// MarshalText encodes n as a hex string with 0x prefix.
-func (n BlockNonce) MarshalText() ([]byte, error) {
-	return hexutil.Bytes(n[:]).MarshalText()
-}
-
-// UnmarshalText implements encoding.TextUnmarshaler.
-func (n *BlockNonce) UnmarshalText(input []byte) error {
-	return hexutil.UnmarshalFixedText("BlockNonce", input, n[:])
 }
 
 //go:generate gencodec -type Header -field-override headerMarshaling -out gen_header_json.go
@@ -183,49 +163,6 @@ func (h *Header) EncodeRLP(w io.Writer) error {
 	})
 }
 
-// RPCMarshalHeader converts the given header to the RPC output .
-func (h *Header) RPCMarshalHeader() map[string]interface{} {
-	result := map[string]interface{}{
-		"hash":                h.Hash(),
-		"parentHash":          h.ParentHashArray(),
-		"difficulty":          (*hexutil.Big)(h.Difficulty()),
-		"nonce":               h.Nonce(),
-		"sha3Uncles":          h.UncleHash(),
-		"stateRoot":           h.Root(),
-		"miner":               h.Coinbase(),
-		"extraData":           hexutil.Bytes(h.Extra()),
-		"size":                hexutil.Uint64(h.Size()),
-		"timestamp":           hexutil.Uint64(h.Time()),
-		"transactionsRoot":    h.TxHash(),
-		"receiptsRoot":        h.ReceiptHash(),
-		"extTransactionsRoot": h.EtxHash(),
-		"extRollupRoot":       h.EtxRollupHash(),
-		"manifestHash":        h.ManifestHashArray(),
-		"gasLimit":            hexutil.Uint(h.GasLimit()),
-		"gasUsed":             hexutil.Uint(h.GasUsed()),
-		"location":            hexutil.Bytes(h.Location()),
-		"mixHash":             h.MixHash(),
-	}
-
-	number := make([]*hexutil.Big, common.HierarchyDepth)
-	parentEntropy := make([]*hexutil.Big, common.HierarchyDepth)
-	parentDeltaS := make([]*hexutil.Big, common.HierarchyDepth)
-	for i := 0; i < common.HierarchyDepth; i++ {
-		number[i] = (*hexutil.Big)(h.Number(i))
-		parentEntropy[i] = (*hexutil.Big)(h.ParentEntropy(i))
-		parentDeltaS[i] = (*hexutil.Big)(h.ParentDeltaS(i))
-	}
-	result["number"] = number
-	result["parentEntropy"] = parentEntropy
-	result["parentDeltaS"] = parentDeltaS
-
-	if h.BaseFee() != nil {
-		result["baseFeePerGas"] = (*hexutil.Big)(h.BaseFee())
-	}
-
-	return result
-}
-
 // Localized accessors
 func (h *Header) ParentHash(args ...int) common.Hash {
 	nodeCtx := common.NodeLocation.Context()
@@ -308,141 +245,6 @@ func (h *Header) Extra() []byte             { return common.CopyBytes(h.extra) }
 func (h *Header) MixHash() common.Hash      { return h.mixHash }
 func (h *Header) Nonce() BlockNonce         { return h.nonce }
 func (h *Header) NonceU64() uint64          { return binary.BigEndian.Uint64(h.nonce[:]) }
-
-func (h *Header) SetParentHash(val common.Hash, args ...int) {
-	h.hash = atomic.Value{}     // clear hash cache
-	h.sealHash = atomic.Value{} // clear sealHash cache
-	nodeCtx := common.NodeLocation.Context()
-	if len(args) > 0 {
-		nodeCtx = args[0]
-	}
-	h.parentHash[nodeCtx] = val
-}
-func (h *Header) SetUncleHash(val common.Hash) {
-	h.hash = atomic.Value{}     // clear hash cache
-	h.sealHash = atomic.Value{} // clear sealHash cache
-	h.uncleHash = val
-}
-func (h *Header) SetCoinbase(val common.Address) {
-	h.hash = atomic.Value{}     // clear hash cache
-	h.sealHash = atomic.Value{} // clear sealHash cache
-	h.coinbase = val
-}
-func (h *Header) SetRoot(val common.Hash) {
-	h.hash = atomic.Value{}     // clear hash cache
-	h.sealHash = atomic.Value{} // clear sealHash cache
-	h.root = val
-}
-func (h *Header) SetTxHash(val common.Hash) {
-	h.hash = atomic.Value{}     // clear hash cache
-	h.sealHash = atomic.Value{} // clear sealHash cache
-	h.txHash = val
-}
-func (h *Header) SetEtxHash(val common.Hash) {
-	h.hash = atomic.Value{}     // clear hash cache
-	h.sealHash = atomic.Value{} // clear sealHash cache
-	h.etxHash = val
-}
-func (h *Header) SetEtxRollupHash(val common.Hash) {
-	h.hash = atomic.Value{}     // clear hash cache
-	h.sealHash = atomic.Value{} // clear sealHash cache
-	h.etxRollupHash = val
-}
-
-func (h *Header) SetParentEntropy(val *big.Int, args ...int) {
-	h.hash = atomic.Value{}     // clear hash cache
-	h.sealHash = atomic.Value{} // clear sealHash cache
-	nodeCtx := common.NodeLocation.Context()
-	if len(args) > 0 {
-		nodeCtx = args[0]
-	}
-	h.parentEntropy[nodeCtx] = val
-}
-
-func (h *Header) SetParentDeltaS(val *big.Int, args ...int) {
-	h.hash = atomic.Value{}     // clear hash cache
-	h.sealHash = atomic.Value{} // clear sealHash cache
-	nodeCtx := common.NodeLocation.Context()
-	if len(args) > 0 {
-		nodeCtx = args[0]
-	}
-	h.parentDeltaS[nodeCtx] = val
-}
-
-func (h *Header) SetManifestHash(val common.Hash, args ...int) {
-	h.hash = atomic.Value{}     // clear hash cache
-	h.sealHash = atomic.Value{} // clear sealHash cache
-	nodeCtx := common.NodeLocation.Context()
-	if len(args) > 0 {
-		nodeCtx = args[0]
-	}
-	h.manifestHash[nodeCtx] = val
-}
-func (h *Header) SetReceiptHash(val common.Hash) {
-	h.hash = atomic.Value{}     // clear hash cache
-	h.sealHash = atomic.Value{} // clear sealHash cache
-	h.receiptHash = val
-}
-func (h *Header) SetDifficulty(val *big.Int) {
-	h.hash = atomic.Value{}     // clear hash cache
-	h.sealHash = atomic.Value{} // clear sealHash cache
-	h.difficulty = new(big.Int).Set(val)
-}
-func (h *Header) SetNumber(val *big.Int, args ...int) {
-	h.hash = atomic.Value{}     // clear hash cache
-	h.sealHash = atomic.Value{} // clear sealHash cache
-	nodeCtx := common.NodeLocation.Context()
-	if len(args) > 0 {
-		nodeCtx = args[0]
-	}
-	h.number[nodeCtx] = new(big.Int).Set(val)
-}
-func (h *Header) SetGasLimit(val uint64) {
-	h.hash = atomic.Value{}     // clear hash cache
-	h.sealHash = atomic.Value{} // clear sealHash cache
-	h.gasLimit = val
-}
-func (h *Header) SetGasUsed(val uint64) {
-	h.hash = atomic.Value{}     // clear hash cache
-	h.sealHash = atomic.Value{} // clear sealHash cache
-	h.gasUsed = val
-}
-func (h *Header) SetBaseFee(val *big.Int) {
-	h.hash = atomic.Value{}     // clear hash cache
-	h.sealHash = atomic.Value{} // clear sealHash cache
-	h.baseFee = new(big.Int).Set(val)
-}
-func (h *Header) SetLocation(val common.Location) {
-	h.hash = atomic.Value{}     // clear hash cache
-	h.sealHash = atomic.Value{} // clear sealHash cache
-	h.location = val
-}
-func (h *Header) SetTime(val uint64) {
-	h.hash = atomic.Value{}     // clear hash cache
-	h.sealHash = atomic.Value{} // clear sealHash cache
-	h.time = val
-}
-func (h *Header) SetExtra(val []byte) {
-	h.hash = atomic.Value{}     // clear hash cache
-	h.sealHash = atomic.Value{} // clear sealHash cache
-	if len(val) > 0 {
-		h.extra = make([]byte, len(val))
-		copy(h.extra, val)
-	}
-}
-func (h *Header) SetMixHash(val common.Hash) {
-	h.hash = atomic.Value{} // clear hash cache
-	h.mixHash = val
-}
-func (h *Header) SetNonce(val BlockNonce) {
-	h.hash = atomic.Value{} // clear hash cache, but NOT sealHash
-	h.nonce = val
-}
-
-// Array accessors
-func (h *Header) ParentHashArray() []common.Hash   { return h.parentHash }
-func (h *Header) ManifestHashArray() []common.Hash { return h.manifestHash }
-func (h *Header) NumberArray() []*big.Int          { return h.number }
 
 // headerData comprises all data fields of the header, excluding the nonce, so
 // that the nonce may be independently adjusted in the work algorithm.
@@ -535,97 +337,6 @@ func (h *Header) Size() common.StorageSize {
 	return headerSize + common.StorageSize(len(h.extra)+(h.difficulty.BitLen()+totalBitLen(h.number))/8)
 }
 
-// SanityCheck checks a few basic things -- these checks are way beyond what
-// any 'sane' production values should hold, and can mainly be used to prevent
-// that the unbounded fields are stuffed with junk data to add processing
-// overhead
-func (h *Header) SanityCheck() error {
-	if h.parentHash == nil || len(h.parentHash) != common.HierarchyDepth {
-		return fmt.Errorf("field cannot be `nil`: parentHash")
-	}
-	if h.manifestHash == nil || len(h.manifestHash) != common.HierarchyDepth {
-		return fmt.Errorf("field cannot be `nil`: manifestHash")
-	}
-	if h.difficulty == nil {
-		return fmt.Errorf("field cannot be `nil`: difficulty")
-	}
-	if h.number == nil || len(h.number) != common.HierarchyDepth {
-		return fmt.Errorf("field cannot be `nil`: number")
-	}
-	if h.parentEntropy == nil || len(h.parentEntropy) != common.HierarchyDepth {
-		return fmt.Errorf("field cannot be `nil`: parentEntropy")
-	}
-	if h.parentDeltaS == nil || len(h.parentDeltaS) != common.HierarchyDepth {
-		return fmt.Errorf("field cannot be `nil`: parentDeltaS")
-	}
-	if h.baseFee == nil {
-		return fmt.Errorf("field cannot be `nil`: baseFee")
-	}
-	if bfLen := h.baseFee.BitLen(); bfLen > 256 {
-		return fmt.Errorf("too large base fee: bitlen %d", bfLen)
-	}
-	for i := 0; i < common.HierarchyDepth; i++ {
-		if h.number == nil {
-			return fmt.Errorf("field cannot be `nil`: number[%d]", i)
-		}
-		if h.number[i] != nil && !h.number[i].IsUint64() {
-			return fmt.Errorf("too large block number[%d]: bitlen %d", i, h.number[i].BitLen())
-		}
-	}
-	if diffLen := h.difficulty.BitLen(); diffLen > 80 {
-		return fmt.Errorf("too large block difficulty: bitlen %d", diffLen)
-	}
-	if eLen := len(h.extra); eLen > 100*1024 {
-		return fmt.Errorf("too large block extradata: size %d", eLen)
-	}
-	return nil
-}
-
-// EmptyBody returns true if there is no additional 'body' to complete the header
-// that is: no transactions and no uncles.
-func (h *Header) EmptyBody() bool {
-	return h.EmptyTxs() && h.EmptyUncles() && h.EmptyEtxs() && h.EmptyManifest()
-}
-
-// EmptyTxs returns true if there are no txs for this header/block.
-func (h *Header) EmptyTxs() bool {
-	return h.TxHash() == EmptyRootHash
-}
-
-// EmptyEtxs returns true if there are no etxs for this header/block.
-func (h *Header) EmptyEtxs() bool {
-	return h.EtxHash() == EmptyRootHash
-}
-
-// EmptyEtxs returns true if there are no etxs for this header/block.
-func (h *Header) EmptyEtxRollup() bool {
-	return h.EtxRollupHash() == EmptyRootHash
-}
-
-// EmptyTxs returns true if there are no txs for this header/block.
-func (h *Header) EmptyManifest() bool {
-	return h.ManifestHash() == EmptyRootHash
-}
-
-// EmptyUncles returns true if there are no uncles for this header/block.
-func (h *Header) EmptyUncles() bool {
-	return h.UncleHash() == EmptyRootHash
-}
-
-// EmptyReceipts returns true if there are no receipts for this header/block.
-func (h *Header) EmptyReceipts() bool {
-	return h.ReceiptHash() == EmptyRootHash
-}
-
-// Body is a simple (mutable, non-safe) data container for storing and moving
-// a block's data contents (transactions and uncles) together.
-type Body struct {
-	Transactions    []*Transaction
-	Uncles          []*Header
-	ExtTransactions []*Transaction
-	SubManifest     BlockManifest
-}
-
 // Block represents an entire block in the Quai blockchain.
 type Block struct {
 	header          *Header
@@ -651,104 +362,6 @@ type extblock struct {
 	Uncles      []*Header
 	Etxs        []*Transaction
 	SubManifest BlockManifest
-}
-
-func NewBlock(header *Header, txs []*Transaction, uncles []*Header, etxs []*Transaction, subManifest BlockManifest, receipts []*Receipt, hasher TrieHasher) *Block {
-	nodeCtx := common.NodeLocation.Context()
-	b := &Block{header: CopyHeader(header)}
-
-	// TODO: panic if len(txs) != len(receipts)
-	if len(txs) == 0 {
-		b.header.SetTxHash(EmptyRootHash)
-	} else {
-		b.header.SetTxHash(DeriveSha(Transactions(txs), hasher))
-		b.transactions = make(Transactions, len(txs))
-		copy(b.transactions, txs)
-	}
-
-	if len(receipts) == 0 {
-		b.header.SetReceiptHash(EmptyRootHash)
-	} else {
-		b.header.SetReceiptHash(DeriveSha(Receipts(receipts), hasher))
-	}
-
-	if len(uncles) == 0 {
-		b.header.SetUncleHash(EmptyUncleHash)
-	} else {
-		b.header.SetUncleHash(CalcUncleHash(uncles))
-		b.uncles = make([]*Header, len(uncles))
-		for i := range uncles {
-			b.uncles[i] = CopyHeader(uncles[i])
-		}
-	}
-
-	if len(etxs) == 0 {
-		b.header.SetEtxHash(EmptyRootHash)
-	} else {
-		b.header.SetEtxHash(DeriveSha(Transactions(etxs), hasher))
-		b.extTransactions = make(Transactions, len(etxs))
-		copy(b.extTransactions, etxs)
-	}
-
-	// Since the subordinate's manifest lives in our body, we still need to check
-	// that the manifest matches the subordinate's manifest hash, but we do not set
-	// the subordinate's manifest hash.
-	subManifestHash := EmptyRootHash
-	if len(subManifest) != 0 {
-		subManifestHash = DeriveSha(subManifest, hasher)
-		b.subManifest = make(BlockManifest, len(subManifest))
-		copy(b.subManifest, subManifest)
-	}
-	if nodeCtx < common.ZONE_CTX && subManifestHash != b.Header().ManifestHash(nodeCtx+1) {
-		log.Error("attempted to build block with invalid subordinate manifest")
-		return nil
-	}
-
-	return b
-}
-
-// NewBlockWithHeader creates a block with the given header data. The
-// header data is copied, changes to header and to the field values
-// will not affect the block.
-func NewBlockWithHeader(header *Header) *Block {
-	return &Block{header: CopyHeader(header)}
-}
-
-// CopyHeader creates a deep copy of a block header to prevent side effects from
-// modifying a header variable.
-func CopyHeader(h *Header) *Header {
-	cpy := *h
-	cpy.parentHash = make([]common.Hash, common.HierarchyDepth)
-	cpy.manifestHash = make([]common.Hash, common.HierarchyDepth)
-	cpy.parentEntropy = make([]*big.Int, common.HierarchyDepth)
-	cpy.parentDeltaS = make([]*big.Int, common.HierarchyDepth)
-	cpy.number = make([]*big.Int, common.HierarchyDepth)
-	for i := 0; i < common.HierarchyDepth; i++ {
-		cpy.SetParentHash(h.ParentHash(i), i)
-		cpy.SetManifestHash(h.ManifestHash(i), i)
-		cpy.SetParentEntropy(h.ParentEntropy(i), i)
-		cpy.SetParentDeltaS(h.ParentDeltaS(i), i)
-		cpy.SetNumber(h.Number(i), i)
-	}
-	cpy.SetUncleHash(h.UncleHash())
-	cpy.SetCoinbase(h.Coinbase())
-	cpy.SetRoot(h.Root())
-	cpy.SetTxHash(h.TxHash())
-	cpy.SetEtxHash(h.EtxHash())
-	cpy.SetEtxRollupHash(h.EtxRollupHash())
-	cpy.SetReceiptHash(h.ReceiptHash())
-	if len(h.extra) > 0 {
-		cpy.extra = make([]byte, len(h.extra))
-		copy(cpy.extra, h.extra)
-	}
-	cpy.SetDifficulty(h.Difficulty())
-	cpy.SetGasLimit(h.GasLimit())
-	cpy.SetGasUsed(h.GasUsed())
-	cpy.SetBaseFee(h.BaseFee())
-	cpy.SetLocation(h.location)
-	cpy.SetTime(h.time)
-	cpy.SetNonce(h.nonce)
-	return &cpy
 }
 
 // DecodeRLP decodes the Quai RLP encoding into b.
@@ -798,175 +411,16 @@ func (b *Block) Extra() []byte                        { return b.header.Extra() 
 func (b *Block) Nonce() BlockNonce                    { return b.header.Nonce() }
 func (b *Block) NonceU64() uint64                     { return b.header.NonceU64() }
 
-// TODO: copies
-
-func (b *Block) Uncles() []*Header          { return b.uncles }
-func (b *Block) Transactions() Transactions { return b.transactions }
-func (b *Block) Transaction(hash common.Hash) *Transaction {
-	for _, transaction := range b.Transactions() {
-		if transaction.Hash() == hash {
-			return transaction
-		}
-	}
-	return nil
-}
-func (b *Block) ExtTransactions() Transactions { return b.extTransactions }
-func (b *Block) ExtTransaction(hash common.Hash) *Transaction {
-	for _, transaction := range b.ExtTransactions() {
-		if transaction.Hash() == hash {
-			return transaction
-		}
-	}
-	return nil
-}
-func (b *Block) SubManifest() BlockManifest { return b.subManifest }
-
-func (b *Block) Header() *Header { return b.header }
-
-// Body returns the non-header content of the block.
-func (b *Block) Body() *Body {
-	return &Body{b.transactions, b.uncles, b.extTransactions, b.subManifest}
-}
-
-// Size returns the true RLP encoded storage size of the block, either by encoding
-// and returning it, or returning a previsouly cached value.
-func (b *Block) Size() common.StorageSize {
-	if size := b.size.Load(); size != nil {
-		return size.(common.StorageSize)
-	}
-	c := writeCounter(0)
-	rlp.Encode(&c, b)
-	b.size.Store(common.StorageSize(c))
-	return common.StorageSize(c)
-}
-
-// SanityCheck can be used to prevent that unbounded fields are
-// stuffed with junk data to add processing overhead
-func (b *Block) SanityCheck() error {
-	return b.header.SanityCheck()
-}
-
-type writeCounter common.StorageSize
-
-func (c *writeCounter) Write(b []byte) (int, error) {
-	*c += writeCounter(len(b))
-	return len(b), nil
-}
-
-func CalcUncleHash(uncles []*Header) common.Hash {
-	if len(uncles) == 0 {
-		return EmptyUncleHash
-	}
-	return RlpHash(uncles)
-}
-
-// WithSeal returns a new block with the data from b but the header replaced with
-// the sealed one.
-func (b *Block) WithSeal(header *Header) *Block {
-	return &Block{
-		header:          CopyHeader(header),
-		transactions:    b.transactions,
-		uncles:          b.uncles,
-		extTransactions: b.extTransactions,
-		subManifest:     b.subManifest,
-	}
-}
-
-// WithBody returns a new block with the given transaction and uncle contents, for a single context
-func (b *Block) WithBody(transactions []*Transaction, uncles []*Header, extTransactions []*Transaction, subManifest BlockManifest) *Block {
-	block := &Block{
-		header:          CopyHeader(b.header),
-		transactions:    make([]*Transaction, len(transactions)),
-		uncles:          make([]*Header, len(uncles)),
-		extTransactions: make([]*Transaction, len(extTransactions)),
-		subManifest:     make(BlockManifest, len(subManifest)),
-	}
-	copy(block.transactions, transactions)
-	copy(block.extTransactions, extTransactions)
-	copy(block.subManifest, subManifest)
-	for i := range uncles {
-		block.uncles[i] = CopyHeader(uncles[i])
-	}
-	return block
-}
-
-// Hash returns the keccak256 hash of b's header.
-// The hash is computed on the first call and cached thereafter.
-func (b *Block) Hash() common.Hash {
-	return b.header.Hash()
-}
-
-// GetAppendTime returns the appendTime of the block
-// The appendTime is computed on the first call and cached thereafter.
-func (b *Block) GetAppendTime() time.Duration {
-	if appendTime := b.appendTime.Load(); appendTime != nil {
-		if val, ok := appendTime.(time.Duration); ok {
-			return val
-		}
-	}
-	return -1
-}
-
-func (b *Block) SetAppendTime(appendTime time.Duration) {
-	b.appendTime.Store(appendTime)
-}
-
-type Blocks []*Block
-
 // PendingHeader stores the header and termini value associated with the header.
 type PendingHeader struct {
 	header  *Header `json:"header"`
 	termini Termini `json:"termini"`
 }
 
-// accessor methods for pending header
-func (ph PendingHeader) Header() *Header {
-	return ph.header
-}
-func (ph PendingHeader) Termini() Termini {
-	return ph.termini
-}
-
-func (ph *PendingHeader) SetHeader(header *Header) {
-	ph.header = CopyHeader(header)
-}
-
-func (ph *PendingHeader) SetTermini(termini Termini) {
-	ph.termini = CopyTermini(termini)
-}
-
-func EmptyPendingHeader() PendingHeader {
-	pendingHeader := PendingHeader{}
-	pendingHeader.SetTermini(EmptyTermini())
-	return pendingHeader
-}
-
-func NewPendingHeader(header *Header, termini Termini) PendingHeader {
-	emptyPh := EmptyPendingHeader()
-	emptyPh.SetHeader(header)
-	emptyPh.SetTermini(termini)
-	return emptyPh
-}
-
-func CopyPendingHeader(ph *PendingHeader) *PendingHeader {
-	cpy := *ph
-	cpy.SetHeader(CopyHeader(ph.Header()))
-	cpy.SetTermini(CopyTermini(ph.Termini()))
-	return &cpy
-}
-
 // "external" pending header encoding. used for rlp
 type extPendingHeader struct {
 	Header  *Header
 	Termini Termini
-}
-
-func (t Termini) RPCMarshalTermini() map[string]interface{} {
-	result := map[string]interface{}{
-		"domTermini": t.DomTermini(),
-		"subTermini": t.SubTermini(),
-	}
-	return result
 }
 
 // DecodeRLP decodes the Quai RLP encoding into pending header format.
@@ -992,88 +446,6 @@ func (p PendingHeader) EncodeRLP(w io.Writer) error {
 type Termini struct {
 	domTermini []common.Hash `json:"domTermini"`
 	subTermini []common.Hash `json:"subTermini"`
-}
-
-func (t Termini) String() string {
-	return fmt.Sprintf("{DomTermini: [%v, %v, %v], SubTermini: [%v, %v, %v]}",
-		t.DomTerminiAtIndex(0), t.DomTerminiAtIndex(1), t.DomTerminiAtIndex(2),
-		t.SubTerminiAtIndex(0), t.SubTerminiAtIndex(1), t.SubTerminiAtIndex(2),
-	)
-}
-
-func CopyTermini(termini Termini) Termini {
-	newTermini := EmptyTermini()
-	for i, t := range termini.domTermini {
-		newTermini.SetDomTerminiAtIndex(t, i)
-	}
-	for i, t := range termini.subTermini {
-		newTermini.SetSubTerminiAtIndex(t, i)
-	}
-	return newTermini
-}
-
-func EmptyTermini() Termini {
-	termini := Termini{}
-	termini.subTermini = make([]common.Hash, common.HierarchyDepth)
-	termini.domTermini = make([]common.Hash, common.HierarchyDepth)
-	return termini
-}
-
-func (t Termini) DomTerminus() common.Hash {
-	return t.domTermini[common.NodeLocation.DomIndex()]
-}
-
-func (t Termini) DomTermini() []common.Hash {
-	return t.domTermini
-}
-
-func (t Termini) SubTermini() []common.Hash {
-	return t.subTermini
-}
-
-func (t Termini) SubTerminiAtIndex(index int) common.Hash {
-	return t.subTermini[index]
-}
-
-func (t Termini) DomTerminiAtIndex(index int) common.Hash {
-	return t.domTermini[index]
-}
-
-func (t *Termini) SetDomTerminiAtIndex(val common.Hash, index int) {
-	t.domTermini[index] = val
-}
-
-func (t *Termini) SetSubTermini(subTermini []common.Hash) {
-	t.subTermini = make([]common.Hash, len(subTermini))
-	for i := 0; i < len(subTermini); i++ {
-		t.subTermini[i] = subTermini[i]
-	}
-}
-
-func (t *Termini) SetDomTermini(domTermini []common.Hash) {
-	t.domTermini = make([]common.Hash, len(domTermini))
-	for i := 0; i < len(domTermini); i++ {
-		t.domTermini[i] = domTermini[i]
-	}
-}
-
-func (t *Termini) SetSubTerminiAtIndex(val common.Hash, index int) {
-	t.subTermini[index] = val
-}
-
-func (t *Termini) IsValid() bool {
-	if t == nil {
-		return false
-	}
-	if len(t.subTermini) != common.NumZonesInRegion {
-		return false
-	}
-
-	if len(t.domTermini) != common.NumZonesInRegion {
-		return false
-	}
-
-	return true
 }
 
 // "external termini" pending header encoding. used for rlp
@@ -1109,25 +481,4 @@ func (m BlockManifest) Len() int { return len(m) }
 // EncodeIndex encodes the i'th blockhash to w.
 func (m BlockManifest) EncodeIndex(i int, w *bytes.Buffer) {
 	rlp.Encode(w, m[i])
-}
-
-// Size returns the approximate memory used by all internal contents. It is used
-// to approximate and limit the memory consumption of various caches.
-func (m BlockManifest) Size() common.StorageSize {
-	return common.StorageSize(m.Len() * common.HashLength)
-}
-
-type HashAndNumber struct {
-	Hash   common.Hash
-	Number uint64
-}
-
-type HashAndLocation struct {
-	Hash     common.Hash
-	Location common.Location
-}
-
-type BlockRequest struct {
-	Hash    common.Hash
-	Entropy *big.Int
 }

@@ -20,7 +20,6 @@ import (
 	"io"
 
 	"github.com/dominant-strategies/progpow-verification-wasm/common"
-	"github.com/dominant-strategies/progpow-verification-wasm/common/hexutil"
 	"github.com/dominant-strategies/progpow-verification-wasm/rlp"
 )
 
@@ -53,13 +52,6 @@ type Log struct {
 	// The Removed field is true if this log was reverted due to a chain reorganisation.
 	// You must pay attention to this field if you receive logs through a filter query.
 	Removed bool `json:"removed"`
-}
-
-type logMarshaling struct {
-	Data        hexutil.Bytes
-	BlockNumber hexutil.Uint64
-	TxIndex     hexutil.Uint
-	Index       hexutil.Uint
 }
 
 type rlpLog struct {

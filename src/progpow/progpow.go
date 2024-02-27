@@ -23,8 +23,6 @@ import (
 )
 
 var (
-	// sharedProgpow is a full instance that can be shared between multiple users.
-	sharedProgpow *Progpow
 	// algorithmRevision is the data structure version used for file naming.
 	algorithmRevision = 1
 	// dumpMagic is a dataset dump header to sanity check a data dump.
@@ -307,35 +305,16 @@ func isLittleEndian() bool {
 }
 
 // Some useful constants to avoid constant memory allocs for them.
-var (
-	expDiffPeriod = big.NewInt(100000)
-	big0          = big.NewInt(0)
-	big1          = big.NewInt(1)
-	big2          = big.NewInt(2)
-	big3          = big.NewInt(3)
-	big8          = big.NewInt(8)
-	big9          = big.NewInt(9)
-	big10         = big.NewInt(10)
-	big32         = big.NewInt(32)
-	bigMinus99    = big.NewInt(-99)
-	big2e256      = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0)) // 2^256
-)
+var big2e256 = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0)) // 2^256
 
 // Various error messages to mark blocks invalid. These should be private to
 // prevent engine specific errors from being referenced in the remainder of the
 // codebase, inherently breaking if the engine is swapped out. Please put common
 // error types into the consensus package.
 var (
-	errOlderBlockTime      = errors.New("timestamp older than parent")
-	errTooManyUncles       = errors.New("too many uncles")
-	errDuplicateUncle      = errors.New("duplicate uncle")
-	errUncleIsAncestor     = errors.New("uncle is ancestor")
-	errDanglingUncle       = errors.New("uncle's parent is not ancestor")
-	errInvalidDifficulty   = errors.New("non-positive difficulty")
-	errDifficultyCrossover = errors.New("sub's difficulty exceeds dom's")
-	errInvalidMixHash      = errors.New("invalid mixHash")
-	errInvalidPoW          = errors.New("invalid proof-of-work")
-	errInvalidOrder        = errors.New("invalid order")
+	errInvalidDifficulty = errors.New("non-positive difficulty")
+	errInvalidMixHash    = errors.New("invalid mixHash")
+	errInvalidPoW        = errors.New("invalid proof-of-work")
 )
 
 func (progpow *Progpow) ComputePowLight(header *types.Header) (mixHash, powHash common.Hash) {

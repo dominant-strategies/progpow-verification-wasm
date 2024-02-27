@@ -159,16 +159,6 @@ func (tx *Transaction) Type() uint8 {
 	return tx.inner.txType()
 }
 
-// Hash returns the transaction hash.
-func (tx *Transaction) Hash() common.Hash {
-	if hash := tx.hash.Load(); hash != nil {
-		return hash.(common.Hash)
-	}
-	h := prefixedRlpHash(tx.Type(), tx.inner)
-	tx.hash.Store(h)
-	return h
-}
-
 // Transactions implements DerivableList for transactions.
 type Transactions []*Transaction
 

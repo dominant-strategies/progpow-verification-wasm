@@ -71,44 +71,12 @@ func Decode(input string) ([]byte, error) {
 	return b, err
 }
 
-// MustDecode decodes a hex string with 0x prefix. It panics for invalid input.
-func MustDecode(input string) []byte {
-	dec, err := Decode(input)
-	if err != nil {
-		panic(err)
-	}
-	return dec
-}
-
 // Encode encodes b as a hex string with 0x prefix.
 func Encode(b []byte) string {
 	enc := make([]byte, len(b)*2+2)
 	copy(enc, "0x")
 	hex.Encode(enc[2:], b)
 	return string(enc)
-}
-
-// DecodeUint64 decodes a hex string with 0x prefix as a quantity.
-func DecodeUint64(input string) (uint64, error) {
-	raw, err := checkNumber(input)
-	if err != nil {
-		return 0, err
-	}
-	dec, err := strconv.ParseUint(raw, 16, 64)
-	if err != nil {
-		err = mapError(err)
-	}
-	return dec, err
-}
-
-// MustDecodeUint64 decodes a hex string with 0x prefix as a quantity.
-// It panics for invalid input.
-func MustDecodeUint64(input string) uint64 {
-	dec, err := DecodeUint64(input)
-	if err != nil {
-		panic(err)
-	}
-	return dec
 }
 
 // EncodeUint64 encodes i as a hex string with 0x prefix.
@@ -119,20 +87,6 @@ func EncodeUint64(i uint64) string {
 }
 
 var bigWordNibbles int
-
-func init() {
-	// This is a weird way to compute the number of nibbles required for big.Word.
-	// The usual way would be to use constant arithmetic but go vet can't handle that.
-	b, _ := new(big.Int).SetString("FFFFFFFFFF", 16)
-	switch len(b.Bits()) {
-	case 1:
-		bigWordNibbles = 16
-	case 2:
-		bigWordNibbles = 8
-	default:
-		panic("weird big.Word size")
-	}
-}
 
 // DecodeBig decodes a hex string with 0x prefix as a quantity.
 // Numbers larger than 256 bits are not accepted.
@@ -163,16 +117,6 @@ func DecodeBig(input string) (*big.Int, error) {
 	}
 	dec := new(big.Int).SetBits(words)
 	return dec, nil
-}
-
-// MustDecodeBig decodes a hex string with 0x prefix as a quantity.
-// It panics for invalid input.
-func MustDecodeBig(input string) *big.Int {
-	dec, err := DecodeBig(input)
-	if err != nil {
-		panic(err)
-	}
-	return dec
 }
 
 // EncodeBig encodes bigint as a hex string with 0x prefix.

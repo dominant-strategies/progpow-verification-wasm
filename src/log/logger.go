@@ -2,14 +2,12 @@ package log
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 
 	"github.com/natefinch/lumberjack"
 	"github.com/sirupsen/logrus"
-	"gopkg.in/urfave/cli.v1"
 )
 
 type Logger struct {
@@ -17,61 +15,6 @@ type Logger struct {
 }
 
 var Log Logger = Logger{logrus.New()}
-
-func init() {
-
-}
-
-func ConfigureLogger(ctx *cli.Context) {
-	logLevel := logrus.Level(ctx.GlobalInt("verbosity"))
-	Log.SetLevel(logLevel)
-
-	logToStdOut := ctx.GlobalBool("logtostdout")
-
-	log_filename := "nodelogs"
-	regionNum := ctx.GlobalString("region")
-
-	if ctx.GlobalIsSet("zone") {
-		zoneNum := ctx.GlobalString("zone")
-		log_filename = filepath.Join(log_filename, "zone-"+regionNum+"-"+zoneNum)
-	} else if ctx.GlobalIsSet("region") {
-		log_filename = filepath.Join(log_filename, "region-"+regionNum)
-	} else {
-		log_filename = filepath.Join(log_filename, "prime")
-	}
-	log_filename += ".log"
-
-	Log.Formatter = &logrus.TextFormatter{
-		ForceColors:     ctx.GlobalBool("showcolors"),
-		PadLevelText:    true,
-		FullTimestamp:   true,
-		TimestampFormat: "01-02|15:04:05.000",
-	}
-
-	if logToStdOut {
-		Log.SetOutput(os.Stdout)
-	} else {
-		Log.SetOutput(&lumberjack.Logger{
-			Filename:   log_filename,
-			MaxSize:    500, // megabytes
-			MaxBackups: 5,
-			MaxAge:     28, //days
-		})
-	}
-}
-
-func SetLevelInt(level int) {
-	Log.SetLevel(logrus.Level(level))
-}
-
-func SetLevelString(level string) {
-	logLevel, err := logrus.ParseLevel(level)
-	if err != nil {
-		Log.Error("Invalid log level: ", level)
-		return
-	}
-	Log.SetLevel(logLevel)
-}
 
 func New(out_path string) Logger {
 	logger := logrus.New()
@@ -136,13 +79,6 @@ func (l Logger) Panic(msg string, args ...interface{}) {
 	l.Logger.Panic(constructLogMessage(msg, args...))
 }
 
-func Lazy(fn func() string, logLevel string) {
-	level, err := logrus.ParseLevel(logLevel)
-	if err == nil && Log.IsLevelEnabled(level) {
-		callCorrectLevel(level, fn())
-	}
-}
-
 func reportLineNumber(skiplevel int) string {
 	if Logger.GetLevel(Log) < logrus.DebugLevel {
 		return ""
@@ -153,27 +89,6 @@ func reportLineNumber(skiplevel int) string {
 		return ""
 	}
 	return fmt.Sprintf("%s:%d", fileAndDir, line)
-}
-
-func callCorrectLevel(level logrus.Level, msg string, args ...interface{}) {
-	switch level {
-	case logrus.TraceLevel:
-		Trace(msg, args...)
-	case logrus.DebugLevel:
-		Debug(msg, args...)
-	case logrus.InfoLevel:
-		Info(msg, args...)
-	case logrus.WarnLevel:
-		Warn(msg, args...)
-	case logrus.ErrorLevel:
-		Error(msg, args...)
-	case logrus.FatalLevel:
-		Fatal(msg, args...)
-	case logrus.PanicLevel:
-		Panic(msg, args...)
-	default:
-		Error("Unknown log level: %v", level)
-	}
 }
 
 func constructLogMessage(msg string, fields ...interface{}) string {

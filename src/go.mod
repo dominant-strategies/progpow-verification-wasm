@@ -5,11 +5,9 @@ go 1.21.6
 require (
 	github.com/edsrzf/mmap-go v1.1.0
 	github.com/hashicorp/golang-lru v1.0.2
-	github.com/ledgerwatch/secp256k1 v1.0.0
 	github.com/natefinch/lumberjack v2.0.0+incompatible
 	github.com/sirupsen/logrus v1.9.3
 	golang.org/x/crypto v0.20.0
-	gopkg.in/urfave/cli.v1 v1.20.0
 	lukechampine.com/blake3 v1.2.1
 )
 

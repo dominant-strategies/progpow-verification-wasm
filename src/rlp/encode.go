@@ -24,13 +24,6 @@ import (
 	"sync"
 )
 
-var (
-	// Common encoded values.
-	// These are useful when implementing EncodeRLP.
-	EmptyString = []byte{0x80}
-	EmptyList   = []byte{0xC0}
-)
-
 // Encoder is implemented by types that require custom
 // encoding rules or want to encode private fields.
 type Encoder interface {
@@ -63,32 +56,6 @@ func Encode(w io.Writer, val interface{}) error {
 		return err
 	}
 	return eb.toWriter(w)
-}
-
-// EncodeToBytes returns the RLP encoding of val.
-// Please see package-level documentation for the encoding rules.
-func EncodeToBytes(val interface{}) ([]byte, error) {
-	eb := encbufPool.Get().(*encbuf)
-	defer encbufPool.Put(eb)
-	eb.reset()
-	if err := eb.encode(val); err != nil {
-		return nil, err
-	}
-	return eb.toBytes(), nil
-}
-
-// EncodeToReader returns a reader from which the RLP encoding of val
-// can be read. The returned size is the total size of the encoded
-// data.
-//
-// Please see the documentation of Encode for the encoding rules.
-func EncodeToReader(val interface{}) (size int, r io.Reader, err error) {
-	eb := encbufPool.Get().(*encbuf)
-	eb.reset()
-	if err := eb.encode(val); err != nil {
-		return 0, nil, err
-	}
-	return eb.size(), &encReader{buf: eb}, nil
 }
 
 type listhead struct {
